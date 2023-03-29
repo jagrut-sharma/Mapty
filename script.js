@@ -3,14 +3,6 @@
 // prettier-ignore
 const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-const form = document.querySelector('.form');
-const containerWorkouts = document.querySelector('.workouts');
-const inputType = document.querySelector('.form__input--type');
-const inputDistance = document.querySelector('.form__input--distance');
-const inputDuration = document.querySelector('.form__input--duration');
-const inputCadence = document.querySelector('.form__input--cadence');
-const inputElevation = document.querySelector('.form__input--elevation');
-
 class Workout {
   date = new Date();
   id = (Date.now() + '').slice(-10); // very bad practice for creating id
@@ -22,6 +14,7 @@ class Workout {
 }
 
 class Running extends Workout {
+  type = 'running';
   constructor(coords, distance, duration, cadence) {
     super(coords, distance, duration);
     this.cadence = cadence;
@@ -34,6 +27,7 @@ class Running extends Workout {
 }
 
 class Cycling extends Workout {
+  type = 'cycling';
   constructor(coords, distance, duration, elevationGain) {
     super(coords, distance, duration);
     this.elevationGain = elevationGain; // min/km
@@ -48,17 +42,23 @@ class Cycling extends Workout {
 const run1 = new Running([39, -12], 5.2, 24, 178);
 const cycling1 = new Cycling([39, -12], 27, 95, 523);
 
-console.log(run1);
-console.log(cycling1);
-
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 // APPLICATION INTERFACE
+const form = document.querySelector('.form');
+const containerWorkouts = document.querySelector('.workouts');
+const inputType = document.querySelector('.form__input--type');
+const inputDistance = document.querySelector('.form__input--distance');
+const inputDuration = document.querySelector('.form__input--duration');
+const inputCadence = document.querySelector('.form__input--cadence');
+const inputElevation = document.querySelector('.form__input--elevation');
+
 class App {
   #map;
   #mapEvent;
+  #workouts = [];
   constructor() {
     this._getPosition();
 
@@ -119,15 +119,70 @@ class App {
     // Preventing default reload:
     e.preventDefault();
 
+    // Get data from the form:
+    const { lat, lng } = this.#mapEvent.latlng;
+    const type = inputType.value;
+    const distance = +inputDistance.value;
+    const duration = +inputDuration.value;
+    let workout;
+
+    // Helper functions:
+    const isDataNumber = (...inputs) =>
+      inputs.every(inp => Number.isFinite(inp));
+
+    const isPositive = (...inputs) => inputs.every(inp => inp > 0);
+
+    // Running:
+    if (type === 'running') {
+      const cadence = +inputCadence.value;
+      // check if data is valid:
+      if (
+        //: !Number.isFinite(distance) ||
+        //: !Number.isFinite(duration) ||
+        //: !Number.isFinite(cadence)
+        !isDataNumber(distance, duration, cadence) ||
+        !isPositive(distance, duration, cadence)
+      ) {
+        return alert('Inputs have to be a positive number');
+      }
+      // Creating a running object:
+      workout = new Running([lat, lng], distance, duration, cadence);
+    }
+
+    // Cycling:
+    if (type === 'cycling') {
+      const elevation = +inputElevation.value;
+      // check if data is valid:
+      if (
+        !isDataNumber(distance, duration, elevation) ||
+        !isPositive(distance, duration)
+      ) {
+        return alert('Inputs have to be a positive number');
+      }
+      // Creating a cycling object:
+      workout = new Cycling([lat, lng], distance, duration, elevation);
+    }
+
+    // Add new object to workout array
+    this.#workouts.push(workout);
+    console.log(workout);
+
+    // Render workout on map as marker:
+    this.renderWorkoutMarker(workout);
+
+    // Render wokout on list
+
+    // Clear input field + hide form:
     inputCadence.value =
       inputDistance.value =
       inputDuration.value =
       inputElevation.value =
         '';
+  }
 
-    // Adding a marker:
-    const { lat, lng } = this.#mapEvent.latlng;
-    L.marker([lat, lng])
+  renderWorkoutMarker(workout) {
+    // here WE have called the function and it is not a callback function of any other function => No need to use bind
+    L.marker(workout.coords)
       .addTo(this.#map)
       .bindPopup(
         L.popup({
@@ -135,10 +190,10 @@ class App {
           minWidth: 100,
           autoClose: false,
           closeOnClick: false,
-          className: 'running-popup',
+          className: `${workout.type}-popup`,
         })
       )
-      .setPopupContent('Workout')
+      .setPopupContent(`${workout.distance}`)
       .openPopup();
   }
 }
