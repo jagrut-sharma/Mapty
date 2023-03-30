@@ -3,6 +3,7 @@
 class Workout {
   date = new Date();
   id = (Date.now() + '').slice(-10); // very bad practice for creating id
+  clicks = 0; // Counting number of clicks
   constructor(coords, distance, duration) {
     this.coords = coords; // [lat, lng]
     this.distance = distance; // km
@@ -16,6 +17,10 @@ class Workout {
       months[this.date.getMonth()]
     } ${this.date.getDate()}
     `;
+  }
+
+  click() {
+    this.clicks++;
   }
 }
 
@@ -67,14 +72,21 @@ class App {
   #map;
   #mapEvent;
   #workouts = [];
+  #mapZoomLevel = 13;
   constructor() {
     this._getPosition();
+
+    // get data from local storage:
+    this._getLocalStorage();
 
     // Submitting the form:
     form.addEventListener('submit', this._newWorkout.bind(this));
 
     // toggling elevation field:
     inputType.addEventListener('change', this._toggleElevationField.bind(this));
+
+    // Moving to the clicked workout on map:
+    containerWorkouts.addEventListener('click', this._moveToPopup.bind(this));
   }
 
   _getPosition() {
@@ -95,7 +107,7 @@ class App {
     const coords = [latitude, longitude];
 
     // Rendering map from leaflet:
-    this.#map = L.map('map').setView(coords, 13);
+    this.#map = L.map('map').setView(coords, this.#mapZoomLevel);
 
     // An object of type e is stored in map
     // console.log(map); // e {options: {…}, _handlers: Array(7), _layers: {…}, _zoomBoundLayers: {…}, _sizeChanged: false, …}
@@ -109,6 +121,9 @@ class App {
 
     // Handling clicks on map:
     this.#map.on('click', this._showForm.bind(this));
+
+    // Rendering the marker from local storage:
+    this.#workouts.forEach(work => this._renderWorkoutMarker(work));
   }
 
   _showForm(mapE) {
@@ -198,6 +213,9 @@ class App {
 
     // Clear input field + hide form:
     this._hideForm();
+
+    // Set local storage to store all workouts:
+    this._setLocalStorage();
   }
 
   _renderWorkoutMarker(workout) {
@@ -221,7 +239,7 @@ class App {
 
   _renderWorkout(workout) {
     let html = `
-    <li class="workout workout--${workout.type}" data-id="1234567890">
+    <li class="workout workout--${workout.type}" data-id="${workout.id}">
       <h2 class="workout__title">${workout.description}</h2>
       <div class="workout__details">
         <span class="workout__icon">${
@@ -258,7 +276,7 @@ class App {
           <div class="workout__details">
           <span class="workout__icon">⚡️</span>
           <span class="workout__value">${workout.speed}</span>
-          <span class="workout__unit">min/km</span>
+          <span class="workout__unit">km/hr</span>
         </div>
         <div class="workout__details">
           <span class="workout__icon">⛰️</span>
@@ -270,6 +288,51 @@ class App {
     }
 
     form.insertAdjacentHTML('afterend', html);
+  }
+
+  _moveToPopup(e) {
+    const workoutEle = e.target.closest('.workout');
+    console.log(workoutEle);
+
+    if (!workoutEle) return;
+
+    const workout = this.#workouts.find(
+      ({ id }) => id === workoutEle.dataset.id
+    );
+    console.log(workout);
+    this.#map.setView(workout.coords, this.#mapZoomLevel, {
+      animate: true,
+      pan: {
+        duration: 1,
+      },
+    });
+
+    // Using pubkic interface to count clicks:
+    // workout.click();
+    // Won't work when local storage added because once converted back to object from string => It loses the prototype chain.
+    // ? We can overcome this by looping over the data obtained from converting string to object and making objects of it from class. Do it from _newWorkout => We already have the object, we just need to call the methods starting from pushing into the array of this.#workouts.
+  }
+
+  _setLocalStorage() {
+    localStorage.setItem('workout', JSON.stringify(this.#workouts));
+  }
+
+  _getLocalStorage() {
+    const data = JSON.parse(localStorage.getItem('workout'));
+    console.log(data);
+
+    if (!data) return;
+
+    // Extract data from local storage:
+    this.#workouts = data;
+    // Loop over the value and generate list.
+    this.#workouts.forEach(work => this._renderWorkout(work));
+  }
+
+  reset() {
+    // A public method to clear local storage
+    localStorage.removeItem('workout');
+    location.reload(); // location is abig object given by browser => it gives us teh ability to reload the page.
   }
 }
 
